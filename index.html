@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>用 Claude + Agent Trade Kit 从 0 到 1 搭建 AI 交易员</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Noto+Sans+SC:wght@300;400;500;700;900&family=Inter:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.5.0/echarts.min.js"></script>
+<script src="https://unpkg.com/@phosphor-icons/web@2.0.3"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        okx: { gold: '#FCD535', dark: '#0B0E11', card: '#121519', border: '#1E2329', green: '#0ECB81', red: '#F6465D', muted: '#848E9C', light: '#EAECEF' },
+      },
+      fontFamily: {
+        mono: ['JetBrains Mono', 'monospace'],
+        sans: ['Noto Sans SC', 'Inter', 'sans-serif'],
+        display: ['Inter', 'Noto Sans SC', 'sans-serif'],
+      }
+    }
+  }
+}
+</script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{overflow-x:hidden;background:#0B0E11}
+::selection{background:#FCD535;color:#0B0E11}
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:#0B0E11}
+::-webkit-scrollbar-thumb{background:#1E2329;border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:#FCD535}
+
+.noise::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;opacity:.035;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+
+#progress-bar{position:fixed;top:0;left:0;height:3px;background:linear-gradient(90deg,#FCD535,#F0B90B);z-index:10000;width:0;transition:width .1s linear}
+
+.terminal{background:#0a0c0f;border:1px solid #1E2329;border-radius:12px;overflow:hidden;font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.7}
+.terminal-header{background:#121519;padding:8px 16px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #1E2329}
+.terminal-dot{width:10px;height:10px;border-radius:50%}
+.terminal-body{padding:16px 20px;overflow-x:auto;white-space:pre;color:#a8b5c8}
+.terminal-body .prompt{color:#FCD535}
+.terminal-body .cmd{color:#EAECEF}
+.terminal-body .out{color:#6B7A8D}
+.terminal-body .val-green{color:#0ECB81}
+.terminal-body .val-red{color:#F6465D}
+.terminal-body .val-gold{color:#FCD535}
+.terminal-body .comment{color:#3d4f63;font-style:italic}
+
+.copy-btn{position:absolute;top:12px;right:12px;background:#1E2329;border:1px solid #2B3139;color:#848E9C;font-size:11px;padding:4px 10px;border-radius:6px;cursor:pointer;font-family:'JetBrains Mono',monospace;transition:all .2s}
+.copy-btn:hover{background:#FCD535;color:#0B0E11;border-color:#FCD535}
+
+.section-reveal{opacity:0;transform:translateY(40px)}
+.glow-line{height:1px;background:linear-gradient(90deg,transparent,#FCD535 50%,transparent);opacity:.3}
+
+.card-glass{background:rgba(18,21,25,.8);backdrop-filter:blur(12px);border:1px solid #1E2329;border-radius:16px}
+
+.badge{display:inline-flex;align-items:center;gap:4px;padding:4px 12px;border-radius:999px;font-size:12px;font-weight:600;font-family:'JetBrains Mono',monospace}
+.badge-green{background:rgba(14,203,129,.12);color:#0ECB81;border:1px solid rgba(14,203,129,.25)}
+.badge-red{background:rgba(246,70,93,.12);color:#F6465D;border:1px solid rgba(246,70,93,.25)}
+.badge-gold{background:rgba(252,213,53,.1);color:#FCD535;border:1px solid rgba(252,213,53,.25)}
+
+.timeline-item{position:relative;padding-left:32px}
+.timeline-item::before{content:'';position:absolute;left:7px;top:24px;bottom:-8px;width:1px;background:#1E2329}
+.timeline-item:last-child::before{display:none}
+.timeline-dot{position:absolute;left:0;top:6px;width:16px;height:16px;border-radius:50%;border:2px solid #FCD535;background:#0B0E11;z-index:1}
+
+@keyframes pulse-gold{0%,100%{box-shadow:0 0 0 0 rgba(252,213,53,.4)}70%{box-shadow:0 0 0 10px rgba(252,213,53,0)}}
+.pulse-gold{animation:pulse-gold 2s infinite}
+
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+
+.hero-glow{position:absolute;width:500px;height:500px;border-radius:50%;filter:blur(120px);opacity:.15;pointer-events:none}
+
+@media(max-width:768px){
+  .terminal-body{font-size:11px;padding:12px 14px}
+  .terminal{font-size:11px}
+}
+</style>
+</head>
+<body class="bg-okx-dark text-okx-light font-sans">
+
+<!-- Progress Bar -->
+<div id="progress-bar"></div>
+<div class="noise"></div>
+
+<!-- Hero Section -->
+<header class="relative min-h-screen flex items-center justify-center overflow-hidden px-4">
+  <div class="hero-glow bg-okx-gold" style="top:-100px;left:-150px"></div>
+  <div class="hero-glow bg-yellow-600" style="bottom:-200px;right:-100px"></div>
+  <div class="relative z-10 text-center max-w-4xl mx-auto">
+    <div class="mb-6">
+      <span class="badge badge-gold text-sm"><i class="ph ph-trophy"></i> #OKXAI交易大赛</span>
+      <span class="badge badge-gold text-sm ml-2"><i class="ph ph-robot"></i> 内容创作奖</span>
+    </div>
+    <h1 class="font-display text-4xl md:text-6xl lg:text-7xl font-900 leading-tight mb-6">
+      <span class="text-okx-light">用 Claude +</span><br>
+      <span class="text-okx-gold">Agent Trade Kit</span><br>
+      <span class="text-okx-light">从 0 到 1 搭建</span>
+      <span class="text-okx-gold"> AI 交易员</span>
+    </h1>
+    <p class="text-okx-muted text-lg md:text-xl max-w-2xl mx-auto mb-8 leading-relaxed">
+      一句话查行情、一句话下单、一句话开合约。<br>
+      完整实操记录 — 从安装到模拟盘实战全流程。
+    </p>
+    <div class="flex flex-wrap items-center justify-center gap-4 text-sm font-mono text-okx-muted">
+      <span class="flex items-center gap-2"><i class="ph ph-package text-okx-gold"></i> v1.3.0</span>
+      <span class="text-okx-border">|</span>
+      <span class="flex items-center gap-2"><i class="ph ph-clock text-okx-gold"></i> 2026.04.15 实测</span>
+      <span class="text-okx-border">|</span>
+      <span class="flex items-center gap-2"><i class="ph ph-shield-check text-okx-gold"></i> 模拟盘 零风险</span>
+    </div>
+    <div class="mt-12 animate-bounce">
+      <i class="ph ph-caret-double-down text-okx-gold text-2xl"></i>
+    </div>
+  </div>
+</header>
+<!-- Timeline Overview -->
+<section class="py-20 px-4 md:px-8 max-w-4xl mx-auto section-reveal">
+  <div class="glow-line mb-12"></div>
+  <h2 class="font-display text-2xl md:text-3xl font-700 mb-2 text-center">
+    <span class="text-okx-gold"><i class="ph ph-map-trifold"></i></span> 实操路线图
+  </h2>
+  <p class="text-okx-muted text-center mb-10 text-sm">全部操作均在真实模拟盘环境完成，以下为本次实操的完整时间线</p>
+  <div class="space-y-6">
+    <div class="timeline-item">
+      <div class="timeline-dot pulse-gold"></div>
+      <div class="card-glass p-4 rounded-xl">
+        <div class="flex items-center gap-3 mb-1">
+          <span class="badge badge-gold text-xs">Step 1</span>
+          <span class="font-600 text-sm">安装 Agent Trade Kit</span>
+        </div>
+        <p class="text-okx-muted text-xs font-mono">npm install -g @okx_ai/okx-trade-mcp @okx_ai/okx-trade-cli</p>
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-dot pulse-gold"></div>
+      <div class="card-glass p-4 rounded-xl">
+        <div class="flex items-center gap-3 mb-1">
+          <span class="badge badge-gold text-xs">Step 2</span>
+          <span class="font-600 text-sm">配置模拟盘 API Key</span>
+        </div>
+        <p class="text-okx-muted text-xs font-mono">~/.okx/config.toml &rarr; demo = true</p>
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-dot pulse-gold"></div>
+      <div class="card-glass p-4 rounded-xl">
+        <div class="flex items-center gap-3 mb-1">
+          <span class="badge badge-green text-xs">Step 3</span>
+          <span class="font-600 text-sm">实时行情查询 &mdash; BTC / ETH / SOL</span>
+        </div>
+        <p class="text-okx-muted text-xs">无需 API Key &bull; K 线 &bull; 资金费率 &bull; 盘口深度</p>
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-dot pulse-gold"></div>
+      <div class="card-glass p-4 rounded-xl">
+        <div class="flex items-center gap-3 mb-1">
+          <span class="badge badge-green text-xs">Step 4</span>
+          <span class="font-600 text-sm">现货实战 &mdash; 市价买入 / 限价挂单 / 撤单</span>
+        </div>
+        <p class="text-okx-muted text-xs">市价买入 100 USDT BTC &bull; 限价挂单 ETH &bull; 撤销 &bull; 查成交</p>
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-dot pulse-gold"></div>
+      <div class="card-glass p-4 rounded-xl">
+        <div class="flex items-center gap-3 mb-1">
+          <span class="badge badge-green text-xs">Step 5</span>
+          <span class="font-600 text-sm">合约实战 &mdash; 开多 / 持仓 / 平仓</span>
+        </div>
+        <p class="text-okx-muted text-xs">BTC-USDT-SWAP 多头 1 张 &bull; 10x 杠杆 &bull; 全仓模式</p>
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-dot pulse-gold"></div>
+      <div class="card-glass p-4 rounded-xl">
+        <div class="flex items-center gap-3 mb-1">
+          <span class="badge badge-gold text-xs">Step 6</span>
+          <span class="font-600 text-sm">效率对比 + 安全机制 + Claude 集成</span>
+        </div>
+        <p class="text-okx-muted text-xs">传统 vs AI 效率表 &bull; 4 层安全防护 &bull; MCP 一键接入</p>
+      </div>
+    </div>
+  </div>
+  <div class="glow-line mt-12"></div>
+</section>
+<!-- Section 1 - Intro -->
+<section class="py-16 px-4 md:px-8 max-w-4xl mx-auto section-reveal">
+  <div class="flex items-center gap-3 mb-6">
+    <span class="text-okx-gold font-display text-5xl font-900 opacity-20">01</span>
+    <h2 class="font-display text-2xl md:text-3xl font-700">什么是 Agent Trade Kit？</h2>
+  </div>
+  <div class="card-glass p-6 md:p-8 rounded-2xl space-y-4">
+    <p class="text-okx-light leading-relaxed">
+      <span class="text-okx-gold font-600">OKX Agent Trade Kit</span> 是 OKX 官方推出的开源 MCP 工具包，它将 AI 助手（如 Claude、Cursor）与你的 OKX 交易账户直接连接。你只需要用<span class="text-okx-gold">自然语言</span>描述需求，AI 就能自动执行交易。
+    </p>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
+      <div class="bg-okx-dark rounded-xl p-4 border border-okx-border">
+        <div class="text-okx-gold text-2xl mb-2"><i class="ph ph-coins"></i></div>
+        <h3 class="font-600 text-sm mb-1">82 个工具</h3>
+        <p class="text-okx-muted text-xs">现货、合约、期权、策略委托、账户管理、网格机器人</p>
+      </div>
+      <div class="bg-okx-dark rounded-xl p-4 border border-okx-border">
+        <div class="text-okx-gold text-2xl mb-2"><i class="ph ph-shield-checkered"></i></div>
+        <h3 class="font-600 text-sm mb-1">本地安全</h3>
+        <p class="text-okx-muted text-xs">API Key 永不离开本地，HMAC-SHA256 本地签名</p>
+      </div>
+      <div class="bg-okx-dark rounded-xl p-4 border border-okx-border">
+        <div class="text-okx-gold text-2xl mb-2"><i class="ph ph-open-ai-logo"></i></div>
+        <h3 class="font-600 text-sm mb-1">MCP 标准协议</h3>
+        <p class="text-okx-muted text-xs">接入 Claude / Cursor / VS Code 等所有 MCP 客户端</p>
+      </div>
+    </div>
+    <p class="text-okx-muted text-sm pt-2">
+      <i class="ph ph-git-branch text-okx-gold"></i>
+      完全开源（MIT 协议），代码审计透明：
+      <a href="https://github.com/okx/agent-trade-kit" class="text-okx-gold underline underline-offset-2" target="_blank">github.com/okx/agent-trade-kit</a>
+    </p>
+  </div>
+</section>
+
+<!-- Section 2 - Install -->
+<section class="py-16 px-4 md:px-8 max-w-4xl mx-auto section-reveal">
+  <div class="flex items-center gap-3 mb-6">
+    <span class="text-okx-gold font-display text-5xl font-900 opacity-20">02</span>
+    <h2 class="font-display text-2xl md:text-3xl font-700">安装 Agent Trade Kit</h2>
+  </div>
+  <p class="text-okx-muted mb-6">一行命令即可完成安装。需要 Node.js 18+ 环境。</p>
+
+  <div class="relative terminal mb-6">
+    <div class="terminal-header">
+      <span class="terminal-dot" style="background:#F6465D"></span>
+      <span class="terminal-dot" style="background:#FCD535"></span>
+      <span class="terminal-dot" style="background:#0ECB81"></span>
+      <span class="text-okx-muted text-xs font-mono ml-2">Terminal</span>
+    </div>
+    <div class="terminal-body">
+<span class="comment"># 全局安装 MCP 服务器 + CLI 工具</span>
+<span class="prompt">$</span> <span class="cmd">npm install -g @okx_ai/okx-trade-mcp @okx_ai/okx-trade-cli</span>
+
+<span class="out">added 102 packages in 8s</span>
+<span class="out">29 packages are looking for funding</span>
+</div>
+  </div>
+
+  <p class="text-okx-muted text-sm mb-4">安装后直接验证 — <span class="text-okx-gold">查行情无需 API Key</span>：</p>
+  <div class="relative terminal">
+    <div class="terminal-header">
+      <span class="terminal-dot" style="background:#F6465D"></span>
+      <span class="terminal-dot" style="background:#FCD535"></span>
+      <span class="terminal-dot" style="background:#0ECB81"></span>
+      <span class="text-okx-muted text-xs font-mono ml-2">Terminal &mdash; 验证安装</span>
+    </div>
+    <div class="terminal-body">
+<span class="prompt">$</span> <span class="cmd">okx market ticker BTC-USDT</span>
+
+<span class="out">instId                </span><span class="val-gold">BTC-USDT</span>
+<span class="out">last                  </span><span class="val-green">74,789.1</span>
+<span class="out">24h open              71,019.6</span>
+<span class="out">24h high              74,930</span>
+<span class="out">24h low               70,824.1</span>
+<span class="out">24h vol               9,016.72 BTC</span>
+<span class="out">24h change %          </span><span class="val-green">+5.31%</span>
+<span class="out">time                  4/14/2026, 1:36:40 PM</span>
+</div>
+  </div>
+  <p class="text-okx-muted text-xs mt-3"><i class="ph ph-check-circle text-okx-green"></i> 看到价格输出，安装就成功了。</p>
+</section>
+<!-- Section 3 - Config -->
+<section class="py-16 px-4 md:px-8 max-w-4xl mx-auto section-reveal">
+  <div class="flex items-center gap-3 mb-6">
+    <span class="text-okx-gold font-display text-5xl font-900 opacity-20">03</span>
+    <h2 class="font-display text-2xl md:text-3xl font-700">配置模拟盘 API Key</h2>
+  </div>
+
+  <div class="card-glass p-6 rounded-2xl mb-6">
+    <h3 class="font-600 text-okx-gold mb-3 flex items-center gap-2"><i class="ph ph-key"></i> 获取模拟盘 API Key</h3>
+    <ol class="text-okx-light text-sm space-y-2 list-decimal list-inside">
+      <li>登录 <a href="https://www.okx.com" target="_blank" class="text-okx-gold underline underline-offset-2">okx.com</a> &rarr; 右上角头像 &rarr; <span class="text-okx-gold">API 管理</span></li>
+      <li>点击「创建 V5 API Key」&rarr; 选择 <span class="badge badge-gold text-xs">模拟交易</span></li>
+      <li>权限勾选：<span class="text-okx-green">读取 + 交易</span>（不要勾提币）</li>
+      <li>设置 Passphrase（自定义密码短语），记住它</li>
+      <li>保存 API Key、Secret Key、Passphrase 三个值</li>
+    </ol>
+  </div>
+
+  <p class="text-okx-muted text-sm mb-3">方式一：交互式向导（推荐）</p>
+  <div class="terminal mb-6">
+    <div class="terminal-header">
+      <span class="terminal-dot" style="background:#F6465D"></span>
+      <span class="terminal-dot" style="background:#FCD535"></span>
+      <span class="terminal-dot" style="background:#0ECB81"></span>
+      <span class="text-okx-muted text-xs font-mono ml-2">Terminal</span>
+    </div>
+    <div class="terminal-body">
+<span class="prompt">$</span> <span class="cmd">okx config init</span>
+<span class="comment"># 向导会引导你完成配置，运行一次即可</span>
+</div>
+  </div>
+
+  <p class="text-okx-muted text-sm mb-3">方式二：手动创建配置文件</p>
+  <div class="terminal">
+    <div class="terminal-header">
+      <span class="terminal-dot" style="background:#F6465D"></span>
+      <span class="terminal-dot" style="background:#FCD535"></span>
+      <span class="terminal-dot" style="background:#0ECB81"></span>
+      <span class="text-okx-muted text-xs font-mono ml-2">~/.okx/config.toml</span>
+    </div>
+    <div class="terminal-body">
+<span class="val-gold">default_profile</span> = <span class="val-green">"demo"</span>
+
+[<span class="val-gold">profiles.demo</span>]
+api_key    = <span class="val-green">"your-demo-api-key"</span>
+secret_key = <span class="val-green">"your-demo-secret-key"</span>
+passphrase = <span class="val-green">"your-demo-passphrase"</span>
+demo       = <span class="val-green">true</span>    <span class="comment"># demo=true → 模拟盘，不涉及真实资金</span>
+</div>
+  </div>
+
+  <div class="mt-6 p-4 rounded-xl border border-okx-border bg-okx-dark">
+    <p class="text-xs text-okx-muted flex items-start gap-2">
+      <i class="ph ph-warning text-okx-gold text-lg flex-shrink-0 mt-0.5"></i>
+      <span><strong class="text-okx-gold">安全提示：</strong>切勿将 API Key / Secret Key / Passphrase 粘贴到 AI 对话框中。Agent Trade Kit 的密钥只保存在本地配置文件中，AI 模型永远无法读取。</span>
+    </p>
+  </div>
+</section>
+
+<!-- Section 4 - Market Data -->
+<section class="py-16 px-4 md:px-8 max-w-4xl mx-auto section-reveal">
+  <div class="flex items-center gap-3 mb-6">
+    <span class="text-okx-gold font-display text-5xl font-900 opacity-20">04</span>
+    <h2 class="font-display text-2xl md:text-3xl font-700">查询行情数据</h2>
+  </div>
+  <p class="text-okx-muted mb-6">无需 API Key，一句话获取全市场实时数据。</p>
+
+  <!-- Market Tickers -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+    <div class="card-glass p-5 rounded-xl text-center">
+      <p class="text-okx-muted text-xs font-mono mb-1">BTC-USDT</p>
+      <p class="text-3xl font-display font-900 text-okx-light">74,789<span class="text-lg">.1</span></p>
+      <span class="badge badge-green text-xs mt-2">+5.31%</span>
+    </div>
+    <div class="card-glass p-5 rounded-xl text-center">
+      <p class="text-okx-muted text-xs font-mono mb-1">ETH-USDT</p>
+      <p class="text-3xl font-display font-900 text-okx-light">2,389<span class="text-lg">.85</span></p>
+      <span class="badge badge-green text-xs mt-2">+9.19%</span>
+    </div>
+    <div class="card-glass p-5 rounded-xl text-center">
+      <p class="text-okx-muted text-xs font-mono mb-1">SOL-USDT</p>
+      <p class="text-3xl font-display font-900 text-okx-light">86<span class="text-lg">.65</span></p>
+      <span class="badge badge-green text-xs mt-2">+5.17%</span>
+    </div>
+  </div>
+
+  <!-- K-line Chart -->
+  <p class="text-okx-muted text-sm mb-3"><i class="ph ph-chart-line text-okx-gold"></i> BTC 1 小时 K 线（真实数据可视化）</p>
+  <div class="card-glass rounded-xl p-4 mb-6">
+    <div id="chart-kline" style="width:100%;height:320px"></div>
+  </div>
+
+  <div class="terminal mb-6">
+    <div class="terminal-header">
+      <span class="terminal-dot" style="background:#F6465D"></span>
+      <span class="terminal-dot" style="background:#FCD535"></span>
+      <span class="terminal-dot" style="background:#0ECB81"></span>
+      <span class="text-okx-muted text-xs font-mono ml-2">Terminal &mdash; K 线查询</span>
+    </div>
+    <div class="terminal-body">
+<span class="prompt">$</span> <span class="cmd">okx market candles BTC-USDT --bar 1H --limit 5</span>
+
+<span class="out">time                    open     high     low      close    vol</span>
+<span class="out">4/14/2026, 1:00 PM   74462.6  74894.7  74413.8  </span><span class="val-green">74870.8</span><span class="out">  247.685</span>
+<span class="out">4/14/2026, 12:00 PM  74377.8  74492    74281.5  </span><span class="val-green">74462.5</span><span class="out">  167.274</span>
+<span class="out">4/14/2026, 11:00 AM  74348.5  74459.4  74309.7  </span><span class="val-green">74377.7</span><span class="out">  105.627</span>
+<span class="out">4/14/2026, 10:00 AM  74507.7  74615.1  74340    </span><span class="val-red">74348.5</span><span class="out">  170.626</span>
+<span class="out">4/14/2026, 9:00 AM   74752.3  74830.9  74425.2  </span><span class="val-red">74507.6</span><span class="out">  195.224</span>
+</div>
+  </div>
+
+  <!-- Funding Rate + Orderbook -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div>
+      <p class="text-okx-muted text-sm mb-3"><i class="ph ph-percent text-okx-gold"></i> 永续合约资金费率</p>
+      <div class="terminal">
+        <div class="terminal-header">
+          <span class="terminal-dot" style="background:#F6465D"></span>
+          <span class="terminal-dot" style="background:#FCD535"></span>
+          <span class="terminal-dot" style="background:#0ECB81"></span>
+          <span class="text-okx-muted text-xs font-mono ml-2">资金费率</span>
+        </div>
+        <div class="terminal-body">
+<span class="prompt">$</span> <span class="cmd">okx market funding-rate BTC-USDT-SWAP</span>
+
+<span class="out">fundingRate   </span><span class="val-green">0.0000449</span>
+<span class="out">              </span><span class="comment">正值 = 多头付费给空头</span>
+<span class="out">fundingTime   4/14, 4:00 PM</span>
+</div>
+      </div>
+    </div>
+    <div>
+      <p class="text-okx-muted text-sm mb-3"><i class="ph ph-book-open text-okx-gold"></i> 盘口深度</p>
+      <div class="terminal">
+        <div class="terminal-header">
+          <span class="terminal-dot" style="background:#F6465D"></span>
+          <span class="terminal-dot" style="background:#FCD535"></span>
+          <span class="terminal-dot" style="background:#0ECB81"></span>
+          <span class="text-okx-muted text-xs font-mono ml-2">Orderbook</span>
+        </div>
+        <div class="terminal-body">
+<span class="prompt">$</span> <span class="cmd">okx market orderbook BTC-USDT --sz 5</span>
+
+<span class="val-red">Ask  74,870.7  @ 0.100</span>
+<span class="val-red">Ask  74,870.4  @ 0.249</span>
+<span class="val-red">Ask  74,870.3  @ 0.267</span>
+<span class="out">─────────────────────────</span>
+<span class="val-green">Bid  74,865.7  @ 0.017</span>
+<span class="val-green">Bid  74,863.1  @ 0.015</span>
+<span class="val-green">Bid  74,860.3  @ 0.012</span>
+</div>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- Section 5 - Spot Trading -->
+<section class="py-16 px-4 md:px-8 max-w-4xl mx-auto section-reveal">
+  <div class="glow-line mb-12"></div>
+  <div class="flex items-center gap-3 mb-6">
+    <span class="text-okx-gold font-display text-5xl font-900 opacity-20">05</span>
+    <h2 class="font-display text-2xl md:text-3xl font-700">模拟盘实战 &mdash; 现货交易</h2>
+  </div>
+
+  <p class="text-okx-muted mb-3 text-sm"><i class="ph ph-wallet text-okx-gold"></i> 第一步：查看账户余额</p>
+  <div class="terminal mb-6">
+    <div class="terminal-header">
+      <span class="terminal-dot" style="background:#F6465D"></span>
+      <span class="terminal-dot" style="background:#FCD535"></span>
+      <span class="terminal-dot" style="background:#0ECB81"></span>
+      <span class="text-okx-muted text-xs font-mono ml-2">Demo &mdash; 账户余额</span>
+    </div>
+    <div class="terminal-body">
+<span class="prompt">$</span> <span class="cmd">okx --demo account balance</span>
+
+<span class="val-gold">Environment: demo (simulated trading)</span>
+
+<span class="out">currency  equity              available</span>
+<span class="out">BTC       </span><span class="val-green">1.0000</span><span class="out">              1.0000</span>
+<span class="out">USDT      </span><span class="val-green">13,559.03</span><span class="out">           11,471.48</span>
+<span class="out">ETH       </span><span class="val-green">1.0000</span><span class="out">              1.0000</span>
+<span class="out">SOL       0.0012              0.0012</span>
+</div>
+  </div>
+
+  <p class="text-okx-muted mb-3 text-sm"><i class="ph ph-shopping-cart text-okx-gold"></i> 第二步：市价买入 100 USDT 的 BTC</p>
+  <div class="terminal mb-6">
+    <div class="terminal-header">
+      <span class="terminal-dot" style="background:#F6465D"></span>
+      <span class="terminal-dot" style="background:#FCD535"></span>
+      <span class="terminal-dot" style="background:#0ECB81"></span>
+      <span class="text-okx-muted text-xs font-mono ml-2">Demo &mdash; 现货市价买入</span>
+    </div>
+    <div class="terminal-body">
+<span class="prompt">$</span> <span class="cmd">okx --demo spot place --instId BTC-USDT --side buy --ordType market --sz 100</span>
+
+<span class="val-green">Order placed: 3480968769957396480 (OK) &#10003;</span>
+</div>
+  </div>
+
+  <p class="text-okx-muted mb-3 text-sm"><i class="ph ph-clock-countdown text-okx-gold"></i> 第三步：限价挂单买入 0.05 ETH @ 2300</p>
+  <div class="terminal mb-6">
+    <div class="terminal-header">
+      <span class="terminal-dot" style="background:#F6465D"></span>
+      <span class="terminal-dot" style="background:#FCD535"></span>
+      <span class="terminal-dot" style="background:#0ECB81"></span>
+      <span class="text-okx-muted text-xs font-mono ml-2">Demo &mdash; 限价挂单</span>
+    </div>
+    <div class="terminal-body">
+<span class="prompt">$</span> <span class="cmd">okx --demo spot place --instId ETH-USDT \
+    --side buy --ordType limit --px 2300 --sz 0.05</span>
+
+<span class="val-green">Order placed: 3480969113051463680 (OK) &#10003;</span>
+
+<span class="comment"># 查看当前挂单</span>
+<span class="prompt">$</span> <span class="cmd">okx --demo spot orders ETH-USDT</span>
+
+<span class="out">ordId                instId    side  type   price  size  state</span>
+<span class="out">3480969113051463680  ETH-USDT  buy   limit  2300   0.05  </span><span class="val-gold">live</span>
+
+<span class="comment"># 取消挂单</span>
+<span class="prompt">$</span> <span class="cmd">okx --demo spot cancel --instId ETH-USDT --ordId 3480969113051463680</span>
+
+<span class="val-green">Cancelled: 3480969113051463680 (OK) &#10003;</span>
+</div>
+  </div>
+
+  <p class="text-okx-muted mb-3 text-sm"><i class="ph ph-receipt text-okx-gold"></i> 第四步：查看成交记录</p>
+  <div class="terminal">
+    <div class="terminal-header">
+      <span class="terminal-dot" style="background:#F6465D"></span>
+      <span class="terminal-dot" style="background:#FCD535"></span>
+      <span class="terminal-dot" style="background:#0ECB81"></span>
+      <span class="text-okx-muted text-xs font-mono ml-2">Demo &mdash; 现货成交</span>
+    </div>
+    <div class="terminal-body">
+<span class="prompt">$</span> <span class="cmd">okx --demo spot fills BTC-USDT</span>
+
+<span class="out">instId    side  fillPx     fillSz       fee               ts</span>
+<span class="out">BTC-USDT  </span><span class="val-green">buy</span><span class="out">   74,172.6   0.00130576   -0.0000013 BTC   4/15, 8:55 AM</span>
+<span class="out">BTC-USDT  </span><span class="val-green">buy</span><span class="out">   74,172.0   0.00004244   -0.0000000 BTC   4/15, 8:55 AM</span>
+</div>
+  </div>
+
+  <div class="mt-6 p-4 rounded-xl bg-okx-dark border border-okx-border">
+    <p class="text-sm text-okx-light flex items-start gap-2">
+      <i class="ph ph-info text-okx-gold text-lg flex-shrink-0"></i>
+      <span>100 USDT 成功买入约 <span class="text-okx-green font-mono font-600">0.001348 BTC</span>（均价 74,172），成交拆为两笔完成。交易手续费极低。</span>
+    </p>
+  </div>
+</section>
+
+<!-- Section 6 - Swap Trading -->
+<section class="py-16 px-4 md:px-8 max-w-4xl mx-auto section-reveal">
+  <div class="flex items-center gap-3 mb-6">
+    <span class="text-okx-gold font-display text-5xl font-900 opacity-20">06</span>
+    <h2 class="font-display text-2xl md:text-3xl font-700">模拟盘实战 &mdash; 合约交易</h2>
+  </div>
+
+  <p class="text-okx-muted mb-3 text-sm"><i class="ph ph-trend-up text-okx-gold"></i> 第一步：开多 BTC 永续合约</p>
+  <div class="terminal mb-6">
+    <div class="terminal-header">
+      <span class="terminal-dot" style="background:#F6465D"></span>
+      <span class="terminal-dot" style="background:#FCD535"></span>
+      <span class="terminal-dot" style="background:#0ECB81"></span>
+      <span class="text-okx-muted text-xs font-mono ml-2">Demo &mdash; 合约开多</span>
+    </div>
+    <div class="terminal-body">
+<span class="comment"># 开多 1 张 BTC 永续合约，10 倍杠杆，全仓模式</span>
+<span class="prompt">$</span> <span class="cmd">okx --demo swap place --instId BTC-USDT-SWAP \
+    --side buy --ordType market --sz 1 \
+    --posSide long --tdMode cross</span>
+
+<span class="val-green">Order placed: 3480969446985170944 (OK) &#10003;</span>
+</div>
+  </div>
+
+  <p class="text-okx-muted mb-3 text-sm"><i class="ph ph-chart-bar text-okx-gold"></i> 第二步：查看持仓</p>
+  <div class="terminal mb-6">
+    <div class="terminal-header">
+      <span class="terminal-dot" style="background:#F6465D"></span>
+      <span class="terminal-dot" style="background:#FCD535"></span>
+      <span class="terminal-dot" style="background:#0ECB81"></span>
+      <span class="text-okx-muted text-xs font-mono ml-2">Demo &mdash; 合约持仓</span>
+    </div>
+    <div class="terminal-body">
+<span class="prompt">$</span> <span class="cmd">okx --demo swap positions</span>
+
+<span class="out">instId         side   size  avgPx       upl      uplRatio  lever</span>
+<span class="out">BTC-USDT-SWAP  </span><span class="val-green">long</span><span class="out">   1     74,132.9    </span><span class="val-green">+$0.059</span><span class="out">  </span><span class="val-green">+0.08%</span><span class="out">    </span><span class="val-gold">10x</span>
+</div>
+  </div>
+
+  <p class="text-okx-muted mb-3 text-sm"><i class="ph ph-sign-out text-okx-gold"></i> 第三步：平仓</p>
+  <div class="terminal mb-6">
+    <div class="terminal-header">
+      <span class="terminal-dot" style="background:#F6465D"></span>
+      <span class="terminal-dot" style="background:#FCD535"></span>
+      <span class="terminal-dot" style="background:#0ECB81"></span>
+      <span class="text-okx-muted text-xs font-mono ml-2">Demo &mdash; 合约平仓</span>
+    </div>
+    <div class="terminal-body">
+<span class="prompt">$</span> <span class="cmd">okx --demo swap close --instId BTC-USDT-SWAP \
+    --posSide long --mgnMode cross</span>
+
+<span class="val-green">Position closed: BTC-USDT-SWAP long &#10003;</span>
+</div>
+  </div>
+
+  <p class="text-okx-muted mb-3 text-sm"><i class="ph ph-list-dashes text-okx-gold"></i> 第四步：合约成交记录</p>
+  <div class="terminal">
+    <div class="terminal-header">
+      <span class="terminal-dot" style="background:#F6465D"></span>
+      <span class="terminal-dot" style="background:#FCD535"></span>
+      <span class="terminal-dot" style="background:#0ECB81"></span>
+      <span class="text-okx-muted text-xs font-mono ml-2">Demo &mdash; 合约成交</span>
+    </div>
+    <div class="terminal-body">
+<span class="prompt">$</span> <span class="cmd">okx --demo swap fills BTC-USDT-SWAP</span>
+
+<span class="out">instId         side  fillPx     fillSz  fee         ts</span>
+<span class="val-red">BTC-USDT-SWAP  sell  74,110.5   0.86    -$0.318     4/15, 8:56:49 AM</span>
+<span class="val-red">BTC-USDT-SWAP  sell  74,110.6   0.14    -$0.051     4/15, 8:56:49 AM</span>
+<span class="val-green">BTC-USDT-SWAP  buy   74,133.0   0.66    -$0.244     4/15, 8:56:13 AM</span>
+<span class="val-green">BTC-USDT-SWAP  buy   74,132.9   0.08    -$0.029     4/15, 8:56:13 AM</span>
+</div>
+  </div>
+
+  <div class="mt-6 p-4 rounded-xl bg-okx-dark border border-okx-border">
+    <p class="text-sm text-okx-light flex items-start gap-2">
+      <i class="ph ph-lightning text-okx-gold text-lg flex-shrink-0"></i>
+      <span>从开仓到平仓仅用了 <span class="text-okx-gold font-mono font-600">36 秒</span>。均价 74,132.9 开多 → 74,110.5 平仓。全程通过命令行完成，如果接入 Claude 则只需自然语言对话。</span>
+    </p>
+  </div>
+</section>
+<!-- Section 7 - Comparison Table -->
+<section class="py-16 px-4 md:px-8 max-w-4xl mx-auto section-reveal">
+  <div class="glow-line mb-12"></div>
+  <div class="flex items-center gap-3 mb-6">
+    <span class="text-okx-gold font-display text-5xl font-900 opacity-20">07</span>
+    <h2 class="font-display text-2xl md:text-3xl font-700">传统交易 vs AI 交易</h2>
+  </div>
+  <p class="text-okx-muted mb-6 text-sm">同样的操作，效率差距可达 <span class="text-okx-gold font-600">10&ndash;40 倍</span>。</p>
+
+  <div class="card-glass rounded-2xl overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-okx-border">
+            <th class="text-left p-4 text-okx-muted font-mono text-xs">操作</th>
+            <th class="text-left p-4 text-okx-muted font-mono text-xs">传统手动交易</th>
+            <th class="text-left p-4 text-okx-gold font-mono text-xs">AI 一句话完成</th>
+            <th class="text-right p-4 text-okx-muted font-mono text-xs">提速</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="border-b border-okx-border hover:bg-okx-card transition">
+            <td class="p-4 font-500">查看 BTC 价格</td>
+            <td class="p-4 text-okx-muted">打开 App &rarr; 搜索 &rarr; 找交易对<br><span class="text-xs">~30 秒</span></td>
+            <td class="p-4 text-okx-gold">"BTC 现在多少钱？"<br><span class="text-xs text-okx-green">~2 秒</span></td>
+            <td class="p-4 text-right"><span class="badge badge-green">15x</span></td>
+          </tr>
+          <tr class="border-b border-okx-border hover:bg-okx-card transition">
+            <td class="p-4 font-500">市价买入</td>
+            <td class="p-4 text-okx-muted">切到交易页 &rarr; 选方向 &rarr; 输金额 &rarr; 确认<br><span class="text-xs">~60 秒</span></td>
+            <td class="p-4 text-okx-gold">"买 100U 的 BTC"<br><span class="text-xs text-okx-green">~3 秒</span></td>
+            <td class="p-4 text-right"><span class="badge badge-green">20x</span></td>
+          </tr>
+          <tr class="border-b border-okx-border hover:bg-okx-card transition">
+            <td class="p-4 font-500">开合约仓位</td>
+            <td class="p-4 text-okx-muted">切合约 &rarr; 设杠杆 &rarr; 选方向 &rarr; 输仓位 &rarr; 确认<br><span class="text-xs">~120 秒</span></td>
+            <td class="p-4 text-okx-gold">"开多 1 张 BTC 永续"<br><span class="text-xs text-okx-green">~3 秒</span></td>
+            <td class="p-4 text-right"><span class="badge badge-green">40x</span></td>
+          </tr>
+          <tr class="border-b border-okx-border hover:bg-okx-card transition">
+            <td class="p-4 font-500">设止盈止损</td>
+            <td class="p-4 text-okx-muted">进持仓 &rarr; 设止盈 &rarr; 设止损 &rarr; 确认<br><span class="text-xs">~60 秒</span></td>
+            <td class="p-4 text-okx-gold">"涨到 8 万止盈，跌到 7 万止损"<br><span class="text-xs text-okx-green">~3 秒</span></td>
+            <td class="p-4 text-right"><span class="badge badge-green">20x</span></td>
+          </tr>
+          <tr class="hover:bg-okx-card transition">
+            <td class="p-4 font-500">综合数据查询</td>
+            <td class="p-4 text-okx-muted">分别切换 K 线 / 资金费率 / 盘口 页面<br><span class="text-xs">~180 秒</span></td>
+            <td class="p-4 text-okx-gold">"给我 BTC 的 K 线、费率和盘口"<br><span class="text-xs text-okx-green">~5 秒</span></td>
+            <td class="p-4 text-right"><span class="badge badge-green">36x</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ECharts comparison bar -->
+  <div class="card-glass rounded-xl p-4 mt-6">
+    <div id="chart-compare" style="width:100%;height:280px"></div>
+  </div>
+</section>
+
+<!-- Section 8 - Security -->
+<section class="py-16 px-4 md:px-8 max-w-4xl mx-auto section-reveal">
+  <div class="flex items-center gap-3 mb-6">
+    <span class="text-okx-gold font-display text-5xl font-900 opacity-20">08</span>
+    <h2 class="font-display text-2xl md:text-3xl font-700">四层安全机制</h2>
+  </div>
+  <p class="text-okx-muted mb-8 text-sm">Agent Trade Kit 从架构层面确保你的资金安全。</p>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div class="card-glass p-6 rounded-xl border-l-4 border-okx-gold">
+      <div class="flex items-center gap-3 mb-3">
+        <span class="text-2xl"><i class="ph ph-lock-key text-okx-gold"></i></span>
+        <h3 class="font-600">本地优先安全</h3>
+      </div>
+      <p class="text-okx-muted text-sm leading-relaxed">API Key 保存在本地 <code class="font-mono text-okx-gold text-xs">~/.okx/config.toml</code>。HMAC-SHA256 签名在本地完成。<span class="text-okx-light font-500">AI 模型永远无法访问你的密钥。</span></p>
+    </div>
+    <div class="card-glass p-6 rounded-xl border-l-4 border-okx-green">
+      <div class="flex items-center gap-3 mb-3">
+        <span class="text-2xl"><i class="ph ph-eye-slash text-okx-green"></i></span>
+        <h3 class="font-600">权限感知注册</h3>
+      </div>
+      <p class="text-okx-muted text-sm leading-relaxed">启动时自动读取 API Key 权限。若密钥无交易权限，下单工具<span class="text-okx-light font-500">根本不会注册</span>到 AI 的工具箱中。</p>
+    </div>
+    <div class="card-glass p-6 rounded-xl border-l-4 border-blue-400">
+      <div class="flex items-center gap-3 mb-3">
+        <span class="text-2xl"><i class="ph ph-test-tube text-blue-400"></i></span>
+        <h3 class="font-600">模拟盘模式</h3>
+      </div>
+      <p class="text-okx-muted text-sm leading-relaxed">使用 <code class="font-mono text-okx-gold text-xs">--demo</code> 标志，所有交易在模拟环境完成。<span class="text-okx-light font-500">零真实资金风险</span>，适合测试和学习。</p>
+    </div>
+    <div class="card-glass p-6 rounded-xl border-l-4 border-orange-400">
+      <div class="flex items-center gap-3 mb-3">
+        <span class="text-2xl"><i class="ph ph-warning text-orange-400"></i></span>
+        <h3 class="font-600">风险标签 + 开源审计</h3>
+      </div>
+      <p class="text-okx-muted text-sm leading-relaxed">涉及资金操作的工具标记 <span class="badge badge-red text-xs">[CAUTION]</span>，AI 执行前会确认。MIT 协议完全开源，代码可审计。</p>
+    </div>
+  </div>
+</section>
+
+<!-- Section 9 - Claude Integration -->
+<section class="py-16 px-4 md:px-8 max-w-4xl mx-auto section-reveal">
+  <div class="glow-line mb-12"></div>
+  <div class="flex items-center gap-3 mb-6">
+    <span class="text-okx-gold font-display text-5xl font-900 opacity-20">09</span>
+    <h2 class="font-display text-2xl md:text-3xl font-700">连接 Claude &mdash; 用自然语言交易</h2>
+  </div>
+
+  <p class="text-okx-muted mb-6 text-sm">通过 MCP 协议，一行命令将 Agent Trade Kit 接入你的 AI 客户端。</p>
+
+  <div class="terminal mb-6">
+    <div class="terminal-header">
+      <span class="terminal-dot" style="background:#F6465D"></span>
+      <span class="terminal-dot" style="background:#FCD535"></span>
+      <span class="terminal-dot" style="background:#0ECB81"></span>
+      <span class="text-okx-muted text-xs font-mono ml-2">MCP 接入</span>
+    </div>
+    <div class="terminal-body">
+<span class="comment"># 一键接入 Claude Desktop</span>
+<span class="prompt">$</span> <span class="cmd">okx-trade-mcp setup --client claude-desktop</span>
+
+<span class="comment"># 其他客户端</span>
+<span class="prompt">$</span> <span class="cmd">okx-trade-mcp setup --client cursor</span>
+<span class="prompt">$</span> <span class="cmd">okx-trade-mcp setup --client vscode</span>
+<span class="prompt">$</span> <span class="cmd">okx-trade-mcp setup --client windsurf</span>
+<span class="prompt">$</span> <span class="cmd">okx-trade-mcp setup --client claude-code</span>
+</div>
+  </div>
+
+  <p class="text-okx-muted mb-4 text-sm">接入后，在 Claude 中你可以直接说：</p>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-8">
+    <div class="card-glass p-4 rounded-xl flex items-center gap-3">
+      <i class="ph ph-chat-circle-text text-okx-gold text-xl"></i>
+      <span class="text-sm">"OKX 上 BTC 现在多少钱？"</span>
+    </div>
+    <div class="card-glass p-4 rounded-xl flex items-center gap-3">
+      <i class="ph ph-chat-circle-text text-okx-gold text-xl"></i>
+      <span class="text-sm">"查看我的账户余额"</span>
+    </div>
+    <div class="card-glass p-4 rounded-xl flex items-center gap-3">
+      <i class="ph ph-chat-circle-text text-okx-gold text-xl"></i>
+      <span class="text-sm">"市价买入 100 USDT 的 BTC"</span>
+    </div>
+    <div class="card-glass p-4 rounded-xl flex items-center gap-3">
+      <i class="ph ph-chat-circle-text text-okx-gold text-xl"></i>
+      <span class="text-sm">"BTC 资金费率是多少？"</span>
+    </div>
+    <div class="card-glass p-4 rounded-xl flex items-center gap-3">
+      <i class="ph ph-chat-circle-text text-okx-gold text-xl"></i>
+      <span class="text-sm">"开多 1 张 BTC 永续，全仓 10 倍"</span>
+    </div>
+    <div class="card-glass p-4 rounded-xl flex items-center gap-3">
+      <i class="ph ph-chat-circle-text text-okx-gold text-xl"></i>
+      <span class="text-sm">"涨到 80000 止盈，跌到 70000 止损"</span>
+    </div>
+  </div>
+
+  <div class="card-glass p-6 rounded-2xl">
+    <h3 class="font-600 text-sm mb-3 text-okx-gold"><i class="ph ph-puzzle-piece"></i> 支持的 AI 客户端</h3>
+    <div class="flex flex-wrap gap-3">
+      <span class="badge badge-gold">Claude Desktop</span>
+      <span class="badge badge-gold">Claude Code</span>
+      <span class="badge badge-gold">Cursor</span>
+      <span class="badge badge-gold">VS Code</span>
+      <span class="badge badge-gold">Windsurf</span>
+      <span class="badge badge-gold">OpenClaw</span>
+      <span class="badge" style="background:rgba(255,255,255,.05);color:#848E9C;border:1px solid #1E2329">所有 MCP 兼容客户端</span>
+    </div>
+  </div>
+</section>
+
+<!-- Section 10 - Summary & Links -->
+<section class="py-16 px-4 md:px-8 max-w-4xl mx-auto section-reveal">
+  <div class="glow-line mb-12"></div>
+  <div class="flex items-center gap-3 mb-6">
+    <span class="text-okx-gold font-display text-5xl font-900 opacity-20">10</span>
+    <h2 class="font-display text-2xl md:text-3xl font-700">总结</h2>
+  </div>
+
+  <div class="card-glass p-6 md:p-8 rounded-2xl mb-8">
+    <div class="space-y-4 text-sm leading-relaxed">
+      <p class="text-okx-light">
+        本文从零开始，完整演示了使用 <span class="text-okx-gold font-600">OKX Agent Trade Kit</span> 搭建 AI 交易员的全过程：
+      </p>
+      <ul class="space-y-2 text-okx-muted">
+        <li class="flex items-start gap-2"><i class="ph ph-check-circle text-okx-green mt-0.5"></i> 一行命令安装，无需 API Key 即可查询全市场行情</li>
+        <li class="flex items-start gap-2"><i class="ph ph-check-circle text-okx-green mt-0.5"></i> 配置模拟盘 API Key，零风险开始实战</li>
+        <li class="flex items-start gap-2"><i class="ph ph-check-circle text-okx-green mt-0.5"></i> 现货交易：市价买入、限价挂单、撤单，全部一句话完成</li>
+        <li class="flex items-start gap-2"><i class="ph ph-check-circle text-okx-green mt-0.5"></i> 合约交易：开多、查看持仓、平仓，36 秒完成全流程</li>
+        <li class="flex items-start gap-2"><i class="ph ph-check-circle text-okx-green mt-0.5"></i> 效率对比：AI 交易比手动操作快 10&ndash;40 倍</li>
+        <li class="flex items-start gap-2"><i class="ph ph-check-circle text-okx-green mt-0.5"></i> 四层安全机制：本地密钥、权限感知、模拟盘、风险标签</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3 class="font-600 text-lg mb-4 text-okx-gold"><i class="ph ph-link"></i> 资源链接</h3>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-8">
+    <a href="https://github.com/okx/agent-trade-kit" target="_blank" class="card-glass p-4 rounded-xl flex items-center gap-3 hover:border-okx-gold transition group">
+      <i class="ph ph-github-logo text-xl text-okx-muted group-hover:text-okx-gold transition"></i>
+      <div>
+        <p class="font-600 text-sm">GitHub &mdash; Agent Trade Kit</p>
+        <p class="text-xs text-okx-muted font-mono">github.com/okx/agent-trade-kit</p>
+      </div>
+    </a>
+    <a href="https://www.npmjs.com/package/okx-trade-mcp" target="_blank" class="card-glass p-4 rounded-xl flex items-center gap-3 hover:border-okx-gold transition group">
+      <i class="ph ph-package text-xl text-okx-muted group-hover:text-okx-gold transition"></i>
+      <div>
+        <p class="font-600 text-sm">npm &mdash; okx-trade-mcp</p>
+        <p class="text-xs text-okx-muted font-mono">npmjs.com/package/okx-trade-mcp</p>
+      </div>
+    </a>
+    <a href="https://www.okx.com/docs-v5/agent_zh/" target="_blank" class="card-glass p-4 rounded-xl flex items-center gap-3 hover:border-okx-gold transition group">
+      <i class="ph ph-book-open text-xl text-okx-muted group-hover:text-okx-gold transition"></i>
+      <div>
+        <p class="font-600 text-sm">官方文档</p>
+        <p class="text-xs text-okx-muted font-mono">okx.com/docs-v5/agent_zh/</p>
+      </div>
+    </a>
+    <a href="https://www.okx.com/zh-hans/ai-101" target="_blank" class="card-glass p-4 rounded-xl flex items-center gap-3 hover:border-okx-gold transition group">
+      <i class="ph ph-graduation-cap text-xl text-okx-muted group-hover:text-okx-gold transition"></i>
+      <div>
+        <p class="font-600 text-sm">AI 101 免费课程</p>
+        <p class="text-xs text-okx-muted font-mono">okx.com/zh-hans/ai-101</p>
+      </div>
+    </a>
+    <a href="https://t.me/OKX_AgentKit" target="_blank" class="card-glass p-4 rounded-xl flex items-center gap-3 hover:border-okx-gold transition group">
+      <i class="ph ph-telegram-logo text-xl text-okx-muted group-hover:text-okx-gold transition"></i>
+      <div>
+        <p class="font-600 text-sm">Telegram 社群</p>
+        <p class="text-xs text-okx-muted font-mono">t.me/OKX_AgentKit</p>
+      </div>
+    </a>
+    <a href="https://www.okx.com/zh-hans/agent-tradekit" target="_blank" class="card-glass p-4 rounded-xl flex items-center gap-3 hover:border-okx-gold transition group">
+      <i class="ph ph-rocket text-xl text-okx-muted group-hover:text-okx-gold transition"></i>
+      <div>
+        <p class="font-600 text-sm">Agent Trade Kit 产品页</p>
+        <p class="text-xs text-okx-muted font-mono">okx.com/zh-hans/agent-tradekit</p>
+      </div>
+    </a>
+  </div>
+
+  <div class="text-center py-8">
+    <span class="badge badge-gold text-base px-6 py-2"><i class="ph ph-trophy"></i> #OKXAI交易大赛</span>
+  </div>
+</section>
+<!-- Footer -->
+<footer class="py-12 px-4 text-center border-t border-okx-border">
+  <p class="text-okx-muted text-xs">
+    本文所有交易数据均来自 OKX 模拟盘环境，不涉及真实资金，不构成任何投资建议。
+  </p>
+  <p class="text-okx-muted text-xs mt-2">
+    Agent Trade Kit v1.3.0 &bull; 实测时间 2026.04.15 &bull; MIT License
+  </p>
+</footer>
+
+<script>
+// --- Progress Bar ---
+window.addEventListener('scroll', () => {
+  const h = document.documentElement;
+  const pct = (h.scrollTop / (h.scrollHeight - h.clientHeight)) * 100;
+  document.getElementById('progress-bar').style.width = pct + '%';
+});
+
+// --- GSAP ScrollTrigger Reveals ---
+gsap.registerPlugin(ScrollTrigger);
+gsap.utils.toArray('.section-reveal').forEach(el => {
+  gsap.to(el, {
+    scrollTrigger: { trigger: el, start: 'top 85%', toggleActions: 'play none none none' },
+    opacity: 1, y: 0, duration: 0.8, ease: 'power3.out'
+  });
+});
+
+// --- ECharts: K-Line ---
+(function() {
+  const dom = document.getElementById('chart-kline');
+  if (!dom) return;
+  const chart = echarts.init(dom, null, { renderer: 'svg' });
+  const times = ['09:00','10:00','11:00','12:00','13:00'];
+  // [open, close, low, high]
+  const data = [
+    [74752.3, 74507.6, 74425.2, 74830.9],
+    [74507.7, 74348.5, 74340.0, 74615.1],
+    [74348.5, 74377.7, 74309.7, 74459.4],
+    [74377.8, 74462.5, 74281.5, 74492.0],
+    [74462.6, 74870.8, 74413.8, 74894.7]
+  ];
+  const vols = [195.22, 170.63, 105.63, 167.27, 247.69];
+  chart.setOption({
+    backgroundColor: 'transparent',
+    animation: true,
+    grid: [
+      { left: '8%', right: '4%', top: '8%', height: '55%' },
+      { left: '8%', right: '4%', top: '72%', height: '20%' }
+    ],
+    xAxis: [
+      { type: 'category', data: times, axisLine: { lineStyle: { color: '#1E2329' } }, axisLabel: { color: '#848E9C', fontFamily: 'JetBrains Mono', fontSize: 10 }, gridIndex: 0 },
+      { type: 'category', data: times, axisLine: { show: false }, axisLabel: { show: false }, gridIndex: 1 }
+    ],
+    yAxis: [
+      { scale: true, splitLine: { lineStyle: { color: '#1E2329', type: 'dashed' } }, axisLabel: { color: '#848E9C', fontFamily: 'JetBrains Mono', fontSize: 10, formatter: v => (v/1000).toFixed(1)+'K' }, gridIndex: 0 },
+      { scale: true, splitLine: { show: false }, axisLabel: { show: false }, gridIndex: 1 }
+    ],
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: '#121519',
+      borderColor: '#1E2329',
+      textStyle: { color: '#EAECEF', fontFamily: 'JetBrains Mono', fontSize: 11 },
+      formatter: function(p) {
+        const k = p[0]; const v = p[1];
+        if (!k || !k.data) return '';
+        const d = k.data;
+        const chg = ((d[2]-d[1])/d[1]*100).toFixed(2);
+        const color = d[2] >= d[1] ? '#0ECB81' : '#F6465D';
+        return '<div style="font-size:12px;color:#848E9C">'+k.name+'</div>'
+          +'<div style="margin:4px 0">O: '+d[1]+' &nbsp; C: <span style="color:'+color+'">'+d[2]+'</span></div>'
+          +'<div>H: '+d[4]+' &nbsp; L: '+d[3]+'</div>'
+          +'<div style="margin-top:4px;color:#FCD535">Vol: '+(v?v.data:'')+'</div>';
+      }
+    },
+    series: [
+      {
+        type: 'candlestick',
+        data: data,
+        xAxisIndex: 0,
+        yAxisIndex: 0,
+        itemStyle: { color: '#0ECB81', color0: '#F6465D', borderColor: '#0ECB81', borderColor0: '#F6465D' }
+      },
+      {
+        type: 'bar',
+        data: vols,
+        xAxisIndex: 1,
+        yAxisIndex: 1,
+        itemStyle: {
+          color: function(p) { return data[p.dataIndex][1] >= data[p.dataIndex][0] ? 'rgba(246,70,93,.5)' : 'rgba(14,203,129,.5)'; }
+        }
+      }
+    ]
+  });
+  window.addEventListener('resize', () => chart.resize());
+})();
+
+// --- ECharts: Comparison Bar ---
+(function() {
+  const dom = document.getElementById('chart-compare');
+  if (!dom) return;
+  const chart = echarts.init(dom, null, { renderer: 'svg' });
+  const ops = ['查看价格','市价买入','开合约','设止盈止损','综合查询'];
+  chart.setOption({
+    backgroundColor: 'transparent',
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: '#121519',
+      borderColor: '#1E2329',
+      textStyle: { color: '#EAECEF', fontFamily: 'JetBrains Mono', fontSize: 11 },
+      formatter: function(p) {
+        return p.map(i => '<span style="color:'+i.color+'">'+i.seriesName+'</span>: '+i.value+'s').join('<br>');
+      }
+    },
+    legend: {
+      data: ['手动交易','AI 交易'],
+      textStyle: { color: '#848E9C', fontFamily: 'JetBrains Mono', fontSize: 11 },
+      top: 0
+    },
+    grid: { left: '12%', right: '4%', top: '15%', bottom: '8%' },
+    xAxis: {
+      type: 'value',
+      name: '秒',
+      nameTextStyle: { color: '#848E9C', fontFamily: 'JetBrains Mono', fontSize: 10 },
+      axisLabel: { color: '#848E9C', fontFamily: 'JetBrains Mono', fontSize: 10 },
+      splitLine: { lineStyle: { color: '#1E2329', type: 'dashed' } },
+      axisLine: { lineStyle: { color: '#1E2329' } }
+    },
+    yAxis: {
+      type: 'category',
+      data: ops,
+      axisLine: { lineStyle: { color: '#1E2329' } },
+      axisLabel: { color: '#EAECEF', fontFamily: 'Noto Sans SC', fontSize: 11 }
+    },
+    series: [
+      {
+        name: '手动交易',
+        type: 'bar',
+        data: [30, 60, 120, 60, 180],
+        itemStyle: { color: '#F6465D', borderRadius: [0,4,4,0] },
+        barGap: '30%'
+      },
+      {
+        name: 'AI 交易',
+        type: 'bar',
+        data: [2, 3, 3, 3, 5],
+        itemStyle: { color: '#FCD535', borderRadius: [0,4,4,0] }
+      }
+    ]
+  });
+  window.addEventListener('resize', () => chart.resize());
+})();
+</script>
+</body>
+</html>
