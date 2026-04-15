@@ -52,7 +52,7 @@ okx market funding-rate BTC-USDT-SWAP
 
 ## 演示网站
 
-📖 **[在线教程 & 实操演示](https://fear-hunter.github.io/fear-hunter-skill/)**
+📖 **[在线教程 & 实操演示](https://0xcaptain888.github.io/fear-hunter-skill/)**
 
 ## 文件说明
 
