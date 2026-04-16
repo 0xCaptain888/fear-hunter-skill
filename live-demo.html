@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+body {
+  margin: 0; padding: 0;
+  background: #1a1a2e;
+  display: flex; justify-content: center; align-items: center;
+  min-height: 100vh;
+}
+.terminal {
+  background: #0d1117;
+  border-radius: 12px;
+  width: 920px;
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  overflow: hidden;
+}
+.titlebar {
+  background: #161b22;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dot { width: 12px; height: 12px; border-radius: 50%; }
+.dot.red { background: #ff5f57; }
+.dot.yellow { background: #febc2e; }
+.dot.green { background: #28c840; }
+.titlebar span {
+  color: #8b949e;
+  font-size: 13px;
+  margin-left: 8px;
+}
+.content {
+  padding: 16px 20px;
+  color: #c9d1d9;
+  white-space: pre;
+}
+.prompt { color: #58a6ff; }
+.cmd { color: #f0f6fc; font-weight: bold; }
+.comment { color: #FCD535; font-weight: bold; }
+.success { color: #3fb950; }
+.data { color: #c9d1d9; }
+.highlight { color: #FCD535; }
+.red { color: #f85149; }
+.dim { color: #6e7681; }
+.section { margin-top: 8px; border-top: 1px solid #21262d; padding-top: 8px; }
+</style>
+</head>
+<body>
+<div class="terminal">
+<div class="titlebar">
+  <div class="dot red"></div>
+  <div class="dot yellow"></div>
+  <div class="dot green"></div>
+  <span>lyh@MacBook-Air — zsh — 920×600</span>
+</div>
+<div class="content"><span class="comment">## 恐惧猎手 · Fear Hunter — Live Demo ##</span>
+
+<span class="prompt">lyh@MacBook-Air ~ %</span> <span class="cmd">okx market ticker BTC-USDT</span>
+<span class="data">instId                BTC-USDT
+last                  <span class="success">74714.4</span>
+24h open              73774.1
+24h high              75429.9
+24h low               73587.1
+24h vol               4945.06084702
+24h change %          <span class="success">+1.27%</span>
+time                  4/16/2026, 7:51:46 AM</span>
+<div class="section"></div>
+<span class="prompt">lyh@MacBook-Air ~ %</span> <span class="cmd">okx market funding-rate BTC-USDT-SWAP</span>
+<span class="data">instId                BTC-USDT-SWAP
+fundingRate           <span class="red">-0.0000354899</span> <span class="dim">(负值=空头付费→空头拥挤)</span>
+fundingTime           4/16/2026, 8:00:00 AM</span>
+<div class="section"></div>
+<span class="prompt">lyh@MacBook-Air ~ %</span> <span class="cmd">okx market candles BTC-USDT --bar 1H --limit 5</span>
+<span class="dim">Environment: demo (simulated trading)</span>
+<span class="data">time                   open     high     low      close    vol
+4/16/2026, 7:00:00 AM  75028.6  75077.2  74687.8  74735.9  142.774
+4/16/2026, 6:00:00 AM  75046.3  75117.4  74851.1  75028.6  105.774
+4/16/2026, 5:00:00 AM  74938    75136.5  74888.3  75046.3   77.257
+4/16/2026, 4:00:00 AM  74886.5  75171.9  74717.2  74938    134.620
+4/16/2026, 3:00:00 AM  74883.5  75150    74862.5  74886.4   81.285</span>
+<div class="section"></div>
+<span class="prompt">lyh@MacBook-Air ~ %</span> <span class="cmd">okx market orderbook BTC-USDT --sz 5</span>
+<span class="data">Asks (price / size):
+  <span class="red">74742.7</span>  0.00001344
+  <span class="red">74740.1</span>  0.00001501
+  <span class="red">74739.5</span>  0.00040006
+  <span class="red">74738.3</span>  0.010704
+  <span class="red">74736.0</span>  0.18771068
+Bids (price / size):
+  <span class="success">74735.9</span>  0.4509915
+  <span class="success">74735.6</span>  0.01070912
+  <span class="success">74735.5</span>  0.02914707
+  <span class="success">74735.4</span>  0.01456676
+  <span class="success">74734.3</span>  0.08307837</span>
+<div class="section"></div>
+<span class="prompt">lyh@MacBook-Air ~ %</span> <span class="cmd">okx --demo account balance</span>
+<span class="dim">Environment: demo (simulated trading)</span>
+<span class="data">currency  equity              available           frozen
+BTC       1.0013476503        1.0013468518        0.0000008
+USDT      <span class="highlight">13464.3154707</span>       11122.7358389       2341.5796318
+ETH       1                   1                   0
+SOL       0.001219779         0.001219779         0</span>
+<div class="section"></div>
+<span class="comment">## 策略信号：F&G=23(极度恐惧) + 费率为负(空头拥挤) → 双重恐惧 → 做多 ##</span>
+
+<span class="prompt">lyh@MacBook-Air ~ %</span> <span class="cmd">okx --demo swap place --instId BTC-USDT-SWAP --side buy --ordType market --sz 1 --posSide long --tdMode cross</span>
+<span class="success">Order placed: 3483739728036634624 (OK) ✅</span>
+
+<span class="prompt">lyh@MacBook-Air ~ %</span> <span class="cmd">okx --demo swap positions</span>
+<span class="dim">Environment: demo (simulated trading)</span>
+<span class="data">instId         side  size  avgPx     upl     uplRatio  lever
+BTC-USDT-SWAP  long  1     74709.1   <span class="success">+0.05</span>   <span class="success">+0.07%</span>    10</span>
+
+<span class="prompt">lyh@MacBook-Air ~ %</span> <span class="cmd">okx --demo swap close --instId BTC-USDT-SWAP --posSide long --mgnMode cross</span>
+<span class="success">Position closed: BTC-USDT-SWAP long ✅</span>
+
+<span class="prompt">lyh@MacBook-Air ~ %</span> <span class="highlight">█</span>
+</div>
+</div>
+</body>
+</html>
